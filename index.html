@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caja Chica · Funky Panda</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --stone:#3A3630; --stone-2:#4A4438; --stone-3:#2C2823; --stone-4:#242019;
+    --gold:#C9A227; --rust:#B5651D; --moss:#5A8577;
+    --parchment:#EDE0C0; --parchment-dim:#B9AC88; --danger:#C0472C;
+    --font-hand:'Kalam', cursive; --font-mono:'Space Mono','Courier New',monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--stone-4);color:var(--parchment);font-family:var(--font-mono);}
+  body{min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;}
+  .card{background:var(--stone);border:1.5px solid rgba(201,162,39,.55);border-radius:14px;padding:28px;max-width:420px;width:100%;box-shadow:0 10px 28px rgba(0,0,0,.5);}
+  h1{font-family:var(--font-hand);color:var(--gold);font-size:28px;margin:0 0 4px;}
+  p.sub{color:var(--parchment-dim);font-size:13px;margin:0 0 22px;}
+  label{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--parchment-dim);margin:16px 0 6px;}
+  select, input[type=text], input[type=number]{
+    width:100%;padding:11px 12px;border-radius:4px;border:1px solid var(--stone-2);
+    background:var(--stone-4);color:var(--parchment);font-size:15px;font-family:var(--font-mono);
+  }
+  select:focus, input:focus{outline:none;border-color:var(--gold);}
+  .filebox{border:2px dashed var(--stone-2);border-radius:8px;padding:16px;text-align:center;cursor:pointer;position:relative;}
+  .filebox.has-file{border-color:var(--moss);}
+  .filebox input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;}
+  .filebox .hint{font-size:12px;color:var(--parchment-dim);}
+  #preview{max-width:100%;max-height:220px;border-radius:6px;margin-top:10px;display:none;}
+  button{cursor:pointer;border:none;border-radius:4px;padding:14px 16px;font-size:14px;font-weight:700;
+    width:100%;background:var(--gold);color:#2C2306;text-transform:uppercase;letter-spacing:.04em;
+    font-family:var(--font-mono);margin-top:22px;}
+  button:disabled{opacity:.5;cursor:default;}
+  button:hover:not(:disabled){filter:brightness(1.08);}
+  #msg{font-size:13px;min-height:18px;margin-top:10px;text-align:center;}
+  #msg.ok{color:var(--moss);}
+  #msg.err{color:var(--danger);}
+  .wordmark{font-family:var(--font-hand);color:var(--gold);font-size:14px;text-align:center;margin-top:18px;opacity:.7;}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Caja Chica</h1>
+  <p class="sub">Registra un gasto en efectivo (hielo, pan, imprevistos) con foto del ticket.</p>
+
+  <form id="form">
+    <label for="sucursal">Sucursal</label>
+    <select id="sucursal" required>
+      <option value="">Selecciona...</option>
+      <option value="San Miguel">San Miguel</option>
+      <option value="Brisas">Brisas</option>
+    </select>
+
+    <label for="concepto">¿En qué se gastó?</label>
+    <input type="text" id="concepto" placeholder="Ej. Hielo, pan, gas..." required>
+
+    <label for="monto">Monto ($)</label>
+    <input type="number" id="monto" step="0.01" min="0" placeholder="0.00" required>
+
+    <label for="reportado_por">Tu nombre</label>
+    <input type="text" id="reportado_por" placeholder="¿Quién lo reporta?" required>
+
+    <label>Foto del ticket</label>
+    <div class="filebox" id="fileboxWrap">
+      <input type="file" id="foto" accept="image/*" capture="environment" required>
+      <div class="hint" id="fileboxHint">Toca para tomar foto o elegir una imagen</div>
+      <img id="preview">
+    </div>
+
+    <button type="submit" id="submitBtn">Registrar gasto</button>
+    <div id="msg"></div>
+  </form>
+  <div class="wordmark">Sótano Bajo · Funky Panda</div>
+</div>
+
+<script>
+const WEBHOOK_URL = "https://hook.us2.make.com/55516lwmo5nrsthl4phf34iacwmwh9rh";
+
+const fotoInput = document.getElementById("foto");
+const preview = document.getElementById("preview");
+const fileboxWrap = document.getElementById("fileboxWrap");
+const fileboxHint = document.getElementById("fileboxHint");
+
+fotoInput.addEventListener("change", () => {
+  const file = fotoInput.files[0];
+  if(!file) return;
+  fileboxWrap.classList.add("has-file");
+  fileboxHint.textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = e => { preview.src = e.target.result; preview.style.display = "block"; };
+  reader.readAsDataURL(file);
+});
+
+function fileToBase64(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(",")[1]); // quita el prefijo "data:image/...;base64,"
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById("submitBtn");
+  const msg = document.getElementById("msg");
+  const file = fotoInput.files[0];
+  if(!file){ msg.className = "err"; msg.textContent = "Falta la foto del ticket."; return; }
+
+  btn.disabled = true;
+  msg.className = ""; msg.textContent = "Subiendo...";
+
+  try{
+    const foto_base64 = await fileToBase64(file);
+    const payload = {
+      sucursal: document.getElementById("sucursal").value,
+      concepto: document.getElementById("concepto").value,
+      monto: Number(document.getElementById("monto").value),
+      reportado_por: document.getElementById("reportado_por").value,
+      foto_base64,
+      foto_filename: file.name || "ticket.jpg",
+      foto_mime: file.type || "image/jpeg"
+    };
+    const res = await fetch(WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok) throw new Error("respuesta " + res.status);
+    msg.className = "ok";
+    msg.textContent = "¡Listo! Gasto registrado.";
+    document.getElementById("form").reset();
+    preview.style.display = "none";
+    fileboxWrap.classList.remove("has-file");
+    fileboxHint.textContent = "Toca para tomar foto o elegir una imagen";
+  } catch(err){
+    msg.className = "err";
+    msg.textContent = "No se pudo registrar: " + err.message + ". Intenta de nuevo.";
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
